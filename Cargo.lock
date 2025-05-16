@@ -14182,6 +14182,7 @@ dependencies = [
  "similar",
  "simulacrum",
  "sui-default-config",
+ "sui-display",
  "sui-framework",
  "sui-graphql-rpc-client",
  "sui-graphql-rpc-headers",
