@@ -16,7 +16,7 @@ mod checked {
         programmable_transactions::{
             context::*,
             data_store::SuiDataStore,
-            trace_utils::{trace_ptb_summary, trace_split_coins},
+            trace_utils::{trace_ptb_summary, trace_split_coins, trace_transfer},
         },
         type_resolver::TypeTagResolver,
     };
@@ -36,10 +36,7 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
-    use move_trace_format::{
-        format::{MoveTraceBuilder, TraceEvent},
-        value::SerializableMoveValue,
-    };
+    use move_trace_format::format::{MoveTraceBuilder, TraceEvent};
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
@@ -74,7 +71,6 @@ mod checked {
             MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
             normalize_deserialized_modules,
         },
-        object::bounded_visitor::BoundedVisitor,
         ptb_trace::PTBExternalEvent,
         storage::{PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
@@ -284,28 +280,10 @@ mod checked {
                     .collect::<Result<_, _>>()?;
                 let addr: SuiAddress =
                     context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
+
+                trace_transfer(context, trace_builder_opt, &objs)?;
+
                 for obj in objs {
-                    let layout = context
-                        .vm
-                        .get_runtime()
-                        .type_to_fully_annotated_layout(&obj.type_)
-                        .map_err(|e| {
-                            ExecutionError::new_with_source(
-                                ExecutionErrorKind::InvariantViolation,
-                                e,
-                            )
-                        })?;
-                    if let ObjectContents::Raw(bytes) = &obj.contents {
-                        let move_value = BoundedVisitor::deserialize_value(bytes, &layout)
-                            .map_err(|e| {
-                                ExecutionError::new_with_source(
-                                    ExecutionErrorKind::InvariantViolation,
-                                    e,
-                                )
-                            })?;
-                        let serialized_move_value = SerializableMoveValue::from(move_value);
-                        eprintln!("Serialized move value: {:?}", serialized_move_value);
-                    }
                     obj.ensure_public_transfer_eligible()?;
                     context.transfer_object(obj, addr)?;
                 }

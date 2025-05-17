@@ -27,9 +27,9 @@ pub enum PTBCommandInfo {
 #[derive(Clone, Debug, Serialize)]
 pub enum PTBExternalEvent {
     Summary(Vec<PTBCommandInfo>),
-    MoveCallStart,   // just a marker, all required info is in OpenFrame event
-    MoveCallEnd,     // just a marker to make identifying the end of a MoveCall easier
-    TransferObjects, // TODD
+    MoveCallStart, // just a marker, all required info is in OpenFrame event
+    MoveCallEnd,   // just a marker to make identifying the end of a MoveCall easier
+    TransferObjects(TransferEvent),
     SplitCoins(SplitCoinsEvent),
     Publish,     // TODD
     MergeCoins,  // TODO
@@ -53,4 +53,11 @@ pub struct SplitCoinsEvent {
     pub input: ObjectInfo,
     /// Output coins.
     pub result: Vec<ObjectInfo>,
+}
+
+/// Information about the Transfer external event.
+#[derive(Clone, Debug, Serialize)]
+pub struct TransferEvent {
+    /// Objects to be transferred
+    pub to_transfer: Vec<ObjectInfo>,
 }

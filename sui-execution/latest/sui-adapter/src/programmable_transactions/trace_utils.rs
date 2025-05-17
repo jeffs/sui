@@ -11,7 +11,8 @@ use move_trace_format::{
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_types::coin::Coin;
-use sui_types::ptb_trace::{PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent};
+use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::ptb_trace::{PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent, TransferEvent};
 use sui_types::transaction::Command;
 use sui_types::{
     base_types::ObjectID,
@@ -98,8 +99,56 @@ pub fn trace_split_coins(
     Ok(())
 }
 
+/// Inserts transfer event into the trace.
+pub fn trace_transfer(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    obj_values: &[ObjectValue],
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        let to_transfer = obj_values
+            .into_iter()
+            .map(|v| obj_info_from_obj_value(context, v))
+            .collect::<Result<Vec<_>, _>>()?;
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBExternalEvent::TransferObjects(TransferEvent { to_transfer })
+        ))));
+    }
+    Ok(())
+}
+
+/// Creates `ObjectInfo` from `ObjectValue`.
+fn obj_info_from_obj_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    obj_val: &ObjectValue,
+) -> Result<ObjectInfo, ExecutionError> {
+    let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, &obj_val.type_)?;
+    match &obj_val.contents {
+        ObjectContents::Coin(coin) => {
+            coin_obj_info(type_tag_with_refs, *coin.id.object_id(), coin.value())
+        }
+        ObjectContents::Raw(bytes) => {
+            let layout = context
+                .vm
+                .get_runtime()
+                .type_to_fully_annotated_layout(&obj_val.type_)
+                .map_err(|e| {
+                    ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
+                })?;
+            let move_value = BoundedVisitor::deserialize_value(&bytes, &layout).map_err(|e| {
+                ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
+            })?;
+            let serialized_move_value = SerializableMoveValue::from(move_value);
+            Ok(ObjectInfo {
+                type_: type_tag_with_refs,
+                value: serialized_move_value,
+            })
+        }
+    }
+}
+
 /// Creates `ObjectInfo` for a coin.
-pub fn coin_obj_info(
+fn coin_obj_info(
     type_tag_with_refs: TypeTagWithRefs,
     object_id: ObjectID,
     balance: u64,
