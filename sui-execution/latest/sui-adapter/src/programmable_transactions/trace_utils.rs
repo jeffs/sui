@@ -17,7 +17,7 @@ use sui_types::transaction::Command;
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
-    ptb_trace::ObjectInfo,
+    ptb_trace::MoveValueInfo,
 };
 
 /// Inserts Move call start event into the trace.
@@ -139,7 +139,7 @@ pub fn trace_split_coins(
 fn obj_info_from_obj_value(
     context: &mut ExecutionContext<'_, '_, '_>,
     obj_val: &ObjectValue,
-) -> Result<ObjectInfo, ExecutionError> {
+) -> Result<MoveValueInfo, ExecutionError> {
     let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, &obj_val.type_)?;
     match &obj_val.contents {
         ObjectContents::Coin(coin) => {
@@ -157,7 +157,7 @@ fn obj_info_from_obj_value(
                 ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
             })?;
             let serialized_move_value = SerializableMoveValue::from(move_value);
-            Ok(ObjectInfo {
+            Ok(MoveValueInfo {
                 type_: type_tag_with_refs,
                 value: serialized_move_value,
             })
@@ -170,7 +170,7 @@ fn coin_obj_info(
     type_tag_with_refs: TypeTagWithRefs,
     object_id: ObjectID,
     balance: u64,
-) -> Result<ObjectInfo, ExecutionError> {
+) -> Result<MoveValueInfo, ExecutionError> {
     let coin_type_tag = match type_tag_with_refs.type_.clone() {
         TypeTag::Struct(tag) => tag,
         _ => invariant_violation!("Expected a struct type tag when creating a Move coin value"),
@@ -221,7 +221,7 @@ fn coin_obj_info(
             (Identifier::new("balance").unwrap(), serializable_balance),
         ],
     };
-    Ok(ObjectInfo {
+    Ok(MoveValueInfo {
         type_: type_tag_with_refs,
         value: SerializableMoveValue::Struct(coin_obj),
     })

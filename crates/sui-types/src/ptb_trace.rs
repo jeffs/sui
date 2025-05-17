@@ -37,12 +37,10 @@ pub enum PTBExternalEvent {
     Upgrade,     // TODO
 }
 
-/// Information about an object stored in external trace events.
+/// Information about Move value stored in external trace events.
 #[derive(Clone, Debug, Serialize)]
-pub struct ObjectInfo {
-    /// Coin type.
+pub struct MoveValueInfo {
     pub type_: TypeTagWithRefs,
-    /// Move value representation of the coin.
     pub value: SerializableMoveValue,
 }
 
@@ -50,14 +48,14 @@ pub struct ObjectInfo {
 #[derive(Clone, Debug, Serialize)]
 pub struct SplitCoinsEvent {
     /// Input coin.
-    pub input: ObjectInfo,
+    pub input: MoveValueInfo,
     /// Output coins.
-    pub result: Vec<ObjectInfo>,
+    pub result: Vec<MoveValueInfo>,
 }
 
 /// Information about the Transfer external event.
 #[derive(Clone, Debug, Serialize)]
 pub struct TransferEvent {
     /// Objects to be transferred
-    pub to_transfer: Vec<ObjectInfo>,
+    pub to_transfer: Vec<MoveValueInfo>,
 }
