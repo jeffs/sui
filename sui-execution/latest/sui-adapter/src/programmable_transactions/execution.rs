@@ -16,7 +16,10 @@ mod checked {
         programmable_transactions::{
             context::*,
             data_store::SuiDataStore,
-            trace_utils::{trace_ptb_summary, trace_split_coins, trace_transfer},
+            trace_utils::{
+                trace_move_call_end, trace_move_call_start, trace_ptb_summary, trace_split_coins,
+                trace_transfer,
+            },
         },
         type_resolver::TypeTagResolver,
     };
@@ -36,7 +39,7 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
-    use move_trace_format::format::{MoveTraceBuilder, TraceEvent};
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
@@ -71,7 +74,6 @@ mod checked {
             MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
             normalize_deserialized_modules,
         },
-        ptb_trace::PTBExternalEvent,
         storage::{PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
@@ -371,11 +373,8 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
-                if let Some(trace_builder) = trace_builder_opt {
-                    trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-                        PTBExternalEvent::MoveCallStart
-                    ))));
-                }
+                trace_move_call_start(trace_builder_opt);
+
                 let arguments = context.splat_args(0, arguments)?;
 
                 let module = to_identifier(context, module)?;
@@ -405,11 +404,8 @@ mod checked {
                     /* is_init */ false,
                     trace_builder_opt,
                 );
-                if let Some(trace_builder) = trace_builder_opt {
-                    trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-                        PTBExternalEvent::MoveCallEnd
-                    ))));
-                }
+
+                trace_move_call_end(trace_builder_opt);
 
                 context.linkage_view.reset_linkage();
                 return_values?

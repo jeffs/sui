@@ -20,6 +20,42 @@ use sui_types::{
     ptb_trace::ObjectInfo,
 };
 
+/// Inserts Move call start event into the trace.
+pub fn trace_move_call_start(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
+    if let Some(trace_builder) = trace_builder_opt {
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBExternalEvent::MoveCallStart
+        ))));
+    }
+}
+
+/// Inserts Move call end event into the trace.
+pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
+    if let Some(trace_builder) = trace_builder_opt {
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBExternalEvent::MoveCallEnd
+        ))));
+    }
+}
+
+/// Inserts transfer event into the trace.
+pub fn trace_transfer(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    obj_values: &[ObjectValue],
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        let to_transfer = obj_values
+            .into_iter()
+            .map(|v| obj_info_from_obj_value(context, v))
+            .collect::<Result<Vec<_>, _>>()?;
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBExternalEvent::TransferObjects(TransferEvent { to_transfer })
+        ))));
+    }
+    Ok(())
+}
+
 /// Inserts PTB summary event into the trace.
 pub fn trace_ptb_summary(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -94,24 +130,6 @@ pub fn trace_split_coins(
                 input,
                 result: split_coin_infos,
             })
-        ))));
-    }
-    Ok(())
-}
-
-/// Inserts transfer event into the trace.
-pub fn trace_transfer(
-    context: &mut ExecutionContext<'_, '_, '_>,
-    trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    obj_values: &[ObjectValue],
-) -> Result<(), ExecutionError> {
-    if let Some(trace_builder) = trace_builder_opt {
-        let to_transfer = obj_values
-            .into_iter()
-            .map(|v| obj_info_from_obj_value(context, v))
-            .collect::<Result<Vec<_>, _>>()?;
-        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBExternalEvent::TransferObjects(TransferEvent { to_transfer })
         ))));
     }
     Ok(())
