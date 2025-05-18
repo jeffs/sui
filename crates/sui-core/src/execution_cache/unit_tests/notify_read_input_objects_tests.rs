@@ -43,10 +43,12 @@ async fn test_immediate_return_canceled_shared() {
     let epoch = &0;
 
     // Should return immediately since canceled shared objects are always available
+    let mut did_wait = false;
     cache
-        .notify_read_input_objects(&[canceled_key], &receiving_keys, epoch)
+        .notify_read_input_objects(&[canceled_key], &receiving_keys, epoch, &mut did_wait)
         .now_or_never()
         .unwrap();
+    assert!(!did_wait);
 
     let congested_key = InputKey::VersionedObject {
         id: FullObjectID::new(ObjectID::random(), Some(SequenceNumber::from(1))),
@@ -54,9 +56,10 @@ async fn test_immediate_return_canceled_shared() {
     };
 
     cache
-        .notify_read_input_objects(&[congested_key], &receiving_keys, epoch)
+        .notify_read_input_objects(&[congested_key], &receiving_keys, epoch, &mut did_wait)
         .now_or_never()
         .unwrap();
+    assert!(!did_wait);
 
     let randomness_unavailable_key = InputKey::VersionedObject {
         id: FullObjectID::new(ObjectID::random(), Some(SequenceNumber::from(1))),
@@ -64,9 +67,15 @@ async fn test_immediate_return_canceled_shared() {
     };
 
     cache
-        .notify_read_input_objects(&[randomness_unavailable_key], &receiving_keys, epoch)
+        .notify_read_input_objects(
+            &[randomness_unavailable_key],
+            &receiving_keys,
+            epoch,
+            &mut did_wait,
+        )
         .now_or_never()
         .unwrap();
+    assert!(!did_wait);
 }
 
 #[tokio::test]
@@ -87,10 +96,12 @@ async fn test_immediate_return_cached_object() {
     let epoch = &0;
 
     // Should return immediately since object is in cache
+    let mut did_wait = false;
     cache
-        .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
+        .notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait)
         .now_or_never()
         .unwrap();
+    assert!(!did_wait);
 }
 
 #[tokio::test]
@@ -104,10 +115,12 @@ async fn test_immediate_return_cached_package() {
     let epoch = &0;
 
     // Should return immediately since system package is available by default.
+    let mut did_wait = false;
     cache
-        .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
+        .notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait)
         .now_or_never()
         .unwrap();
+    assert!(!did_wait);
 }
 
 #[tokio::test]
@@ -132,10 +145,12 @@ async fn test_immediate_return_consensus_stream_ended() {
     let receiving_keys = HashSet::new();
 
     // Should return immediately since object is marked as consensus stream ended
+    let mut did_wait = false;
     cache
-        .notify_read_input_objects(&input_keys, &receiving_keys, &epoch)
+        .notify_read_input_objects(&input_keys, &receiving_keys, &epoch, &mut did_wait)
         .now_or_never()
         .unwrap();
+    assert!(!did_wait);
 }
 
 #[tokio::test]
@@ -152,12 +167,14 @@ async fn test_wait_for_object() {
     let receiving_keys = HashSet::new();
     let epoch = &0;
 
+    let mut did_wait = false;
     let result = timeout(
         Duration::from_secs(3),
-        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch),
+        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait),
     )
     .await;
     assert!(result.is_err());
+    assert!(did_wait);
 
     // Write an older version of the object.
     tokio::spawn({
@@ -176,10 +193,11 @@ async fn test_wait_for_object() {
     });
     let result = timeout(
         Duration::from_secs(3),
-        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch),
+        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait),
     )
     .await;
     assert!(result.is_err());
+    assert!(did_wait);
 
     // Write the correct version of the object.
     tokio::spawn({
@@ -198,10 +216,11 @@ async fn test_wait_for_object() {
     });
     timeout(
         Duration::from_secs(3),
-        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch),
+        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait),
     )
     .await
     .unwrap();
+    assert!(did_wait);
 }
 
 #[tokio::test]
@@ -227,7 +246,9 @@ async fn test_wait_for_package() {
     let epoch = &0;
 
     // Start notification future
-    let notification = cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch);
+    let mut did_wait = false;
+    let notification =
+        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait);
 
     // Write package after small delay
     tokio::spawn({
@@ -240,6 +261,7 @@ async fn test_wait_for_package() {
 
     // Should complete once package is written
     timeout(Duration::from_secs(1), notification).await.unwrap();
+    assert!(did_wait);
 }
 
 #[tokio::test]
@@ -257,7 +279,9 @@ async fn test_wait_for_consensus_stream_end() {
     let receiving_keys = HashSet::new();
 
     // Start notification future
-    let notification = cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch);
+    let mut did_wait = false;
+    let notification =
+        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait);
 
     // Write consensus stream ended marker after small delay
     tokio::spawn({
@@ -274,6 +298,7 @@ async fn test_wait_for_consensus_stream_end() {
 
     // Should complete once marker is written
     timeout(Duration::from_secs(1), notification).await.unwrap();
+    assert!(did_wait);
 }
 
 #[tokio::test]
@@ -301,8 +326,10 @@ async fn test_receiving_object_higher_version() {
     let epoch = &0;
 
     // Should return immediately since a higher version exists for receiving object
+    let mut did_wait = false;
     cache
-        .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
+        .notify_read_input_objects(&input_keys, &receiving_keys, epoch, &mut did_wait)
         .now_or_never()
         .unwrap();
+    assert!(!did_wait);
 }

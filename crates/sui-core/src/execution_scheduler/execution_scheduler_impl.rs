@@ -170,15 +170,22 @@ impl ExecutionScheduler {
             "Waiting for input objects: {:?}",
             input_and_receiving_keys
         );
+        let mut did_wait = false;
 
         tokio::select! {
             _ = self.object_cache_read
-                .notify_read_input_objects(&input_and_receiving_keys, &receiving_object_keys, &epoch)
+                .notify_read_input_objects(&input_and_receiving_keys, &receiving_object_keys, &epoch, &mut did_wait)
                 => {
-                    self.metrics
-                        .transaction_manager_transaction_queue_age_s
-                        .observe(enqueue_time.elapsed().as_secs_f64());
-                    tracing::debug!(?digests, "Input objects available");
+                    // transaction_manager_transaction_queue_age_s tracks the amount of time
+                    // a transaction is waiting for input objects.
+                    // If the transaction did not wait, it means that the input objects were already
+                    // available, and we don't want to record the age.
+                    if did_wait {
+                        self.metrics
+                            .transaction_manager_transaction_queue_age_s
+                            .observe(enqueue_time.elapsed().as_secs_f64());
+                        tracing::debug!(?digests, "Input objects available");
+                    }
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     let _ = self.tx_ready_certificates.send(PendingCertificate {
                         certificate: cert.clone(),
