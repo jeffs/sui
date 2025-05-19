@@ -109,13 +109,12 @@ impl ExecutionSchedulerWrapper {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        // In tests, we flip a coin to decide whether to use ExecutionScheduler or TransactionManager,
-        // so that both can be tested.
+        // In tests, we always use ExecutionScheduler.
         // In prod, we use ExecutionScheduler only in devnet.
         // In other networks, we use TransactionManager by default, unless the env variable
         // `ENABLE_EXECUTION_SCHEDULER` is set.
         let enable_execution_scheduler = if cfg!(test) {
-            rand::thread_rng().gen_bool(0.5)
+            true
         } else {
             std::env::var("ENABLE_TRANSACTION_MANAGER").is_err()
                 && (std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
