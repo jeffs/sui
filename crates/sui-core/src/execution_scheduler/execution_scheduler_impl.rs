@@ -91,20 +91,36 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         // Filter out certificates from wrong epoch.
-        let certs = certs.into_iter().filter_map(|cert| {
-            if cert.0.epoch() == epoch_store.epoch() {
-                Some(cert)
-            } else {
-                warn!(
+        let certs: Vec<_> = certs
+            .into_iter()
+            .filter_map(|cert| {
+                if cert.0.epoch() == epoch_store.epoch() {
+                    Some(cert)
+                } else {
+                    warn!(
                     "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
                     epoch_store.epoch(),
                     cert.0.epoch(),
                 );
-                None
-            }
-        });
+                    None
+                }
+            })
+            .collect();
+        let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
+        let executed = self
+            .transaction_cache_read
+            .multi_get_executed_effects_digests(&digests);
+        let pending_certs = certs.into_iter().zip(executed).filter_map(
+            |((cert, expected_effects_digest), executed)| {
+                if executed.is_none() {
+                    Some((cert, expected_effects_digest))
+                } else {
+                    None
+                }
+            },
+        );
 
-        for (cert, expected_effects_digest) in certs {
+        for (cert, expected_effects_digest) in pending_certs {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
             spawn_monitored_task!(
@@ -163,7 +179,7 @@ impl ExecutionScheduler {
         let epoch = epoch_store.epoch();
         let digest = cert.digest();
         let digests = [*digest];
-        tracing::debug!(?digest, "Scheduled transaction in execution scheduler");
+        debug!(?digest, "Scheduled transaction in execution scheduler");
         let enqueue_time = Instant::now();
         tracing::trace!(
             ?digests,
@@ -184,7 +200,7 @@ impl ExecutionScheduler {
                         self.metrics
                             .transaction_manager_transaction_queue_age_s
                             .observe(enqueue_time.elapsed().as_secs_f64());
-                        tracing::debug!(?digest, "Input objects available");
+                        debug!(?digest, "Input objects available");
                     }
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     let _ = self.tx_ready_certificates.send(PendingCertificate {
@@ -203,7 +219,7 @@ impl ExecutionScheduler {
                     });
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
-                tracing::debug!(?digests, "Transaction already executed");
+                debug!(?digests, "Transaction already executed");
             }
         };
     }
