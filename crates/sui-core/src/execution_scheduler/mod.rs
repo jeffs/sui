@@ -8,7 +8,6 @@ use crate::{
 use enum_dispatch::enum_dispatch;
 use execution_scheduler_impl::ExecutionScheduler;
 use prometheus::IntGauge;
-use rand::Rng;
 use std::{collections::BTreeSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_protocol_config::Chain;

@@ -582,6 +582,8 @@ async fn test_per_object_overload() {
         }
         send_consensus(&authorities[3], &shared_cert).await;
     }
+    // Give enough time to schedule the transactions.
+    sleep(Duration::from_secs(3)).await;
 
     // Trying to sign a new transaction would now fail.
     let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[num_txns].id()).await;

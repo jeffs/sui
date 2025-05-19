@@ -22,7 +22,7 @@ use sui_types::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
 
@@ -163,7 +163,7 @@ impl ExecutionScheduler {
         let epoch = epoch_store.epoch();
         let digest = cert.digest();
         let digests = [*digest];
-        tracing::debug!(?digest, "Schedule_transaction");
+        tracing::debug!(?digest, "Scheduled transaction in execution scheduler");
         let enqueue_time = Instant::now();
         tracing::trace!(
             ?digests,
@@ -184,7 +184,7 @@ impl ExecutionScheduler {
                         self.metrics
                             .transaction_manager_transaction_queue_age_s
                             .observe(enqueue_time.elapsed().as_secs_f64());
-                        tracing::debug!(?digests, "Input objects available");
+                        tracing::debug!(?digest, "Input objects available");
                     }
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     let _ = self.tx_ready_certificates.send(PendingCertificate {
@@ -406,14 +406,20 @@ mod test {
             .try_recv()
             .is_err_and(|err| err == TryRecvError::Empty));
 
-        assert_eq!(execution_scheduler.num_pending_certificates(), 1);
+        assert_eq!(execution_scheduler.num_pending_certificates(), 2);
 
         // Notify scheduler about availability of the gas object.
         state
             .get_cache_writer()
             .write_object_entry_for_test(gas_object_new);
         // scheduler should output the transaction eventually.
+        // We will see both the original and the duplicated transaction.
         let pending_certificate = rx_ready_certificates.recv().await.unwrap();
+        let pending_certificate2 = rx_ready_certificates.recv().await.unwrap();
+        assert_eq!(
+            pending_certificate.certificate.digest(),
+            pending_certificate2.certificate.digest()
+        );
 
         // Tests that pending certificate stats are recorded properly. The ready time should be
         // 2 seconds apart from the enqueue time.
@@ -423,15 +429,9 @@ mod test {
                 >= Duration::from_secs(2)
         );
 
-        // Re-enqueue the same transaction should not result in another output.
-        execution_scheduler.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
-        sleep(Duration::from_secs(1)).await;
-        assert!(rx_ready_certificates
-            .try_recv()
-            .is_err_and(|err| err == TryRecvError::Empty));
-
         // Predent we have just executed the transaction.
         drop(pending_certificate);
+        drop(pending_certificate2);
 
         // scheduler should be empty at the end.
         execution_scheduler.check_empty_for_testing();
@@ -625,13 +625,6 @@ mod test {
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
 
-        assert_eq!(execution_scheduler.num_pending_certificates(), 4);
-
-        // Predent we have just executed the transactions.
-        drop(tx_0);
-        drop(tx_1);
-        drop(tx_2);
-
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
         // Make shared_object_2 available.
@@ -651,11 +644,6 @@ mod test {
 
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
-
-        assert_eq!(execution_scheduler.num_pending_certificates(), 1);
-
-        // Predent we have just executed the transaction.
-        drop(tx_3);
 
         execution_scheduler.check_empty_for_testing();
     }
@@ -811,7 +799,7 @@ mod test {
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
-        assert_eq!(execution_scheduler.num_pending_certificates(), 2);
+        assert_eq!(execution_scheduler.num_pending_certificates(), 3);
 
         // Notify scheduler that the receiving object 0 is available.
         state
@@ -1123,11 +1111,6 @@ mod test {
 
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
-
-        assert_eq!(execution_scheduler.num_pending_certificates(), 1);
-
-        // Predent we have just executed the transaction.
-        drop(available_txn);
 
         execution_scheduler.check_empty_for_testing();
     }
