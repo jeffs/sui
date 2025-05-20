@@ -79,6 +79,7 @@ ResolvedGraph {
             no_lint: false,
             lint: false,
         },
+        modes: [],
         implicit_dependencies: {},
     },
     package_table: {
