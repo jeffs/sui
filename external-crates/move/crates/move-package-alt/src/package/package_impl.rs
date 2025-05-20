@@ -36,6 +36,7 @@ pub struct Package<F: MoveFlavor> {
 
 /// An absolute path to a directory containing a loaded Move package (in particular, the directory
 /// must have a Move.toml)
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct PackagePath(PathBuf);
 
 impl<F: MoveFlavor> Package<F> {

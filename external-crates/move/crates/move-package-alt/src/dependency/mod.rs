@@ -29,7 +29,7 @@ use tracing::debug;
 use crate::{
     errors::{GitError, PackageError, PackageResult, ResolverError},
     flavor::MoveFlavor,
-    package::{EnvironmentName, PackageName},
+    package::{EnvironmentName, PackageName, PackagePath},
 };
 
 use external::ExternalDependency;
@@ -91,6 +91,13 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(PinnedGitDependency),
     Local(LocalDependency),
     FlavorSpecific(F::FlavorDependency<Pinned>),
+    Root,
+}
+
+impl<F: MoveFlavor> PinnedDependencyInfo<F> {
+    pub fn fetch(&self) -> PackagePath {
+        todo!()
+    }
 }
 
 // TODO: these should be moved down.
