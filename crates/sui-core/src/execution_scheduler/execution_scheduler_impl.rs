@@ -98,10 +98,10 @@ impl ExecutionScheduler {
                     Some(cert)
                 } else {
                     warn!(
-                    "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
-                    epoch_store.epoch(),
-                    cert.0.epoch(),
-                );
+                        "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                        epoch_store.epoch(),
+                        cert.0.epoch(),
+                    );
                     None
                 }
             })
@@ -110,11 +110,13 @@ impl ExecutionScheduler {
         let executed = self
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
+        let mut already_executed_certs_num = 0;
         let pending_certs = certs.into_iter().zip(executed).filter_map(
             |((cert, expected_effects_digest), executed)| {
                 if executed.is_none() {
                     Some((cert, expected_effects_digest))
                 } else {
+                    already_executed_certs_num += 1;
                     None
                 }
             },
@@ -131,6 +133,11 @@ impl ExecutionScheduler {
                 ))
             );
         }
+
+        self.metrics
+            .transaction_manager_num_enqueued_certificates
+            .with_label_values(&["already_executed"])
+            .inc_by(already_executed_certs_num);
     }
 
     async fn schedule_transaction(
@@ -140,6 +147,7 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let _pending_guard = PendingGuard::new(&self, &cert);
+        let enqueue_time = Instant::now();
         let tx_data = cert.transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
@@ -154,6 +162,10 @@ impl ExecutionScheduler {
                     assert!(self
                         .transaction_cache_read
                         .is_tx_already_executed(cert.digest()));
+                    self.metrics
+                        .transaction_manager_num_enqueued_certificates
+                        .with_label_values(&["already_executed"])
+                        .inc();
                     return;
                 }
             }
@@ -180,12 +192,15 @@ impl ExecutionScheduler {
         let digest = cert.digest();
         let digests = [*digest];
         debug!(?digest, "Scheduled transaction in execution scheduler");
-        let enqueue_time = Instant::now();
         tracing::trace!(
             ?digests,
             "Waiting for input objects: {:?}",
             input_and_receiving_keys
         );
+        self.metrics
+            .transaction_manager_num_enqueued_certificates
+            .with_label_values(&["pending"])
+            .inc();
         let mut did_wait = false;
 
         tokio::select! {
@@ -203,25 +218,35 @@ impl ExecutionScheduler {
                         debug!(?digest, "Input objects available");
                     }
                     // TODO: Eventually we could fold execution_driver into the scheduler.
-                    let _ = self.tx_ready_certificates.send(PendingCertificate {
-                        certificate: cert.clone(),
-                        expected_effects_digest,
-                        waiting_input_objects: BTreeSet::new(),
-                        stats: PendingCertificateStats {
-                            enqueue_time,
-                            ready_time: Some(Instant::now()),
-                        },
-                        executing_guard: Some(ExecutingGuard::new(
-                            self.metrics
-                                .transaction_manager_num_executing_certificates
-                                .clone(),
-                        )),
-                    });
+                    self.send_transaction_for_execution(cert.clone(), expected_effects_digest, enqueue_time);
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 debug!(?digests, "Transaction already executed");
             }
         };
+    }
+
+    fn send_transaction_for_execution(
+        &self,
+        cert: VerifiedExecutableTransaction,
+        expected_effects_digest: Option<TransactionEffectsDigest>,
+        enqueue_time: Instant,
+    ) {
+        let pending_cert = PendingCertificate {
+            certificate: cert,
+            expected_effects_digest,
+            waiting_input_objects: BTreeSet::new(),
+            stats: PendingCertificateStats {
+                enqueue_time,
+                ready_time: Some(Instant::now()),
+            },
+            executing_guard: Some(ExecutingGuard::new(
+                self.metrics
+                    .transaction_manager_num_executing_certificates
+                    .clone(),
+            )),
+        };
+        let _ = self.tx_ready_certificates.send(pending_cert);
     }
 }
 
