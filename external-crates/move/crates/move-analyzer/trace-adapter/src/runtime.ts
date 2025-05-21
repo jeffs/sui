@@ -600,8 +600,10 @@ export class Runtime extends EventEmitter {
                 const prevEvent = this.trace.events[this.eventIndex - 1];
                 sameLine = sameLine &&
                     !(prevEvent.type === TraceEventKind.ReplaceInlinedFrame
-                        || prevEvent.type === TraceEventKind.OpenFrame && prevEvent.id < 0
-                        || prevEvent.type === TraceEventKind.CloseFrame && prevEvent.id < 0);
+                        || prevEvent.type === TraceEventKind.OpenFrame &&
+                        (prevEvent.id === INLINED_FRAME_ID_SAME_FILE || prevEvent.id === INLINED_FRAME_ID_DIFFERENT_FILE)
+                        || prevEvent.type === TraceEventKind.CloseFrame &&
+                        (prevEvent.id === INLINED_FRAME_ID_SAME_FILE || prevEvent.id === INLINED_FRAME_ID_DIFFERENT_FILE));
                 if (sameLine) {
                     if (!next && (currentEvent.kind === TraceInstructionKind.CALL
                         || currentEvent.kind === TraceInstructionKind.CALL_GENERIC)

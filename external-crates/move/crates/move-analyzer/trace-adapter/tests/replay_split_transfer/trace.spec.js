@@ -1,7 +1,5 @@
 const path = require('path');
-console.log("START");
 let action = (runtime) => {
-    console.log("ACTION");
     let res = '';
     res += runtime.toString();
     // step into a function

@@ -561,8 +561,6 @@ export class MoveDebugSession extends LoggingDebugSession {
             const accessChainParts = actualType.split('::');
             const datatypeName = accessChainParts[accessChainParts.length - 1];
             // strip generics to keep the type name short
-            logger.log('actualType: ' + actualType);
-            logger.log('datatypeName: ' + datatypeName);
             return {
                 name,
                 type: value.variantName
