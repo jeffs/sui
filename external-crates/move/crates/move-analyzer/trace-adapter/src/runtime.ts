@@ -573,7 +573,7 @@ export class Runtime extends EventEmitter {
             currentEvent.type === TraceEventKind.OpenFrame ||
             currentEvent.type === TraceEventKind.CloseFrame ||
             currentEvent.type === TraceEventKind.Effect) {
-            // Move call instructions
+            // events ralated to Move call execution
 
             const cmdFrame = this.ptbStack.commandFrame;
             if (!cmdFrame || !('frames' in cmdFrame) || !('globals' in cmdFrame)) {
