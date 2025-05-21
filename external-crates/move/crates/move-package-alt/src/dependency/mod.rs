@@ -95,7 +95,7 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 }
 
 impl<F: MoveFlavor> PinnedDependencyInfo<F> {
-    pub fn fetch(&self) -> PackagePath {
+    pub async fn fetch(&self) -> PackagePath {
         todo!()
     }
 }

@@ -50,32 +50,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
 /// Add [package] and all of its transitive dependencies to `self.inner`.
 async fn add_transitive_dependencies<F: MoveFlavor>(
     dep: &PinnedDependencyInfo<F>,
-    cache: &mut tokio::sync::Mutex<(
-        DiGraph<Package<F>, (EnvironmentName, PackageName)>,
-        BTreeMap<PackagePath, NodeIndex>,
-    )>,
+    graph: &std::sync::Mutex<DiGraph<Package<F>, (EnvironmentName, PackageName)>>,
+    cache: &std::sync::Mutex<BTreeMap<PackagePath, tokio::sync::OnceCell<NodeIndex>>>,
 ) -> PackageResult<NodeIndex> {
-    // lock the graph and cache
-    // check cache - if index in there, return it
-    // otherwise fetch the dependency
-    // add node to the graph and the cache
-    // release the lock
-    // recursively add dependencies and add edges
-    let index = {
-        let path = dep.fetch();
-        let (graph, visited) = cache.get_mut();
-        let package = match visited.get(&path) {
-            Some(index) => return Ok(*index),
-            None => Package::load(dep.clone()).await?,
-        };
-        let index = graph.add_node(package);
-        visited.insert(path, index);
-        index
+    let cell = {
+        cache
+            .lock()
+            .expect("locks shouldn't be poisoned")
+            .entry(dep.path())
+            .or_default()
     };
 
-    for (env, name, dep) in package.pinned_direct_dependencies() {
-        let index = add_transitive_dependencies(dep, cache);
-    }
-
-    todo!()
+    cell.get_or_init(async {}).await
 }
