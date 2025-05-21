@@ -466,7 +466,6 @@ export class MoveDebugSession extends LoggingDebugSession {
     /**
      * Converts a Move reference value to a DAP variable.
      *
-     * @param moveCallStack the current Move call stack
      * @param value reference value.
      * @param name name of variable containing the reference value.
      * @param type optional type of the variable containing the reference value.
@@ -474,12 +473,14 @@ export class MoveDebugSession extends LoggingDebugSession {
      * @throws Error with a descriptive error message if conversion fails.
      */
     private convertMoveRefValue(
-        moveCallStack: IMoveCallStack,
         value: IRuntimeRefValue,
         name: string,
         type?: string
     ): DebugProtocol.Variable {
         const indexedLoc = value.indexedLoc;
+        // Reference values are only present in Move calls when
+        // the Move call stack is present in the command frame
+        const moveCallStack = this.runtime.stack().commandFrame as IMoveCallStack;
         if ('globalIndex' in indexedLoc.loc) {
             // global location
             const globalValue = moveCallStack.globals.get(indexedLoc.loc.globalIndex);
@@ -489,7 +490,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                     + ' when converting Move call ref value ');
             }
             const indexPath = [...indexedLoc.indexPath];
-            return this.convertMoveValue(moveCallStack, globalValue, name, indexPath, type);
+            return this.convertMoveValue(globalValue, name, indexPath, type);
         } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
             // local variable
             const frameID = indexedLoc.loc.frameID;
@@ -516,7 +517,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                     + frameID);
             }
             const indexPath = [...indexedLoc.indexPath];
-            return this.convertMoveValue(moveCallStack, local.value, name, indexPath, type);
+            return this.convertMoveValue(local.value, name, indexPath, type);
         } else {
             throw new Error('Invalid runtime location when comverting Move call ref value');
         }
@@ -525,7 +526,6 @@ export class MoveDebugSession extends LoggingDebugSession {
     /**
      * Converts a Move value to a DAP variable.
      *
-     * @param moveCallStack the current Move call stack
      * @param value variable value
      * @param name variable name
      * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
@@ -535,7 +535,6 @@ export class MoveDebugSession extends LoggingDebugSession {
      * @throws Error with a descriptive error message if conversion has failed.
      */
     private convertMoveValue(
-        moveCallStack: IMoveCallStack,
         value: RuntimeValueType,
         name: string,
         indexPath: number[],
@@ -557,7 +556,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 if (index === undefined || index >= value.length) {
                     throw new Error('Index path for an array is invalid');
                 }
-                return this.convertMoveValue(moveCallStack, value[index], name, indexPath, type);
+                return this.convertMoveValue(value[index], name, indexPath, type);
             }
             const compoundValueReference = this.variableHandles.create(value);
             return {
@@ -572,7 +571,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 if (index === undefined || index >= value.fields.length) {
                     throw new Error('Index path for a compound type is invalid');
                 }
-                return this.convertMoveValue(moveCallStack, value.fields[index][1], name, indexPath, type);
+                return this.convertMoveValue(value.fields[index][1], name, indexPath, type);
             }
             const compoundValueReference = this.variableHandles.create(value);
             // use type if available as it will have information about whether
@@ -600,7 +599,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             if (indexPath.length > 0) {
                 throw new Error('Cannot index into a reference value');
             }
-            return this.convertMoveRefValue(moveCallStack, value, name, type);
+            return this.convertMoveRefValue(value, name, type);
         }
     }
 
@@ -612,20 +611,25 @@ export class MoveDebugSession extends LoggingDebugSession {
      */
     private convertRuntimeVariables(
         runtimeScope: IRuntimeVariableScope,
-        moveCallStack: IMoveCallStack
     ): DebugProtocol.Variable[] {
         const variables: DebugProtocol.Variable[] = [];
         const runtimeVariables = runtimeScope.locals;
         let disassemblyView = false;
-        if (runtimeVariables.length > 0) {
-            // there can be undefined entries in the variables array,
-            // so find any non-undefined one (they will all point to
-            // the same frame)
-            const firstVar = runtimeVariables.find(v => v);
-            if (firstVar) {
-                const varFrame = moveCallStack.frames[firstVar.frameIdx];
-                if (varFrame) {
-                    disassemblyView = varFrame.disassemblyView;
+        const cmdFrame = this.runtime.stack().commandFrame;
+        if (cmdFrame) {
+            // checking for swith to disassembly only makes sense for Move calls
+            // that have Move call stack in the command frame
+            if ('frames' in cmdFrame && 'globals' in cmdFrame && runtimeVariables.length > 0) {
+                // there can be undefined entries in the variables array,
+                // so find any non-undefined one (they will all point to
+                // the same frame)
+                const moveCallStack = cmdFrame as IMoveCallStack;
+                const firstVar = runtimeVariables.find(v => v);
+                if (firstVar) {
+                    const varFrame = moveCallStack.frames[firstVar.frameIdx];
+                    if (varFrame) {
+                        disassemblyView = varFrame.disassemblyView;
+                    }
                 }
             }
         }
@@ -634,7 +638,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 const varName = disassemblyView
                     ? v.info.internalName
                     : v.info.name;
-                const dapVar = this.convertMoveValue(moveCallStack, v.value, varName, [], v.type);
+                const dapVar = this.convertMoveValue(v.value, varName, [], v.type);
                 if (disassemblyView || !varName.includes('%')) {
                     // Don't show "artificial" variables generated by the compiler
                     // for enum and macro execution when showing source code as they
@@ -669,25 +673,22 @@ export class MoveDebugSession extends LoggingDebugSession {
                 // Move call stask is only needed for variable conversion when a Move call is
                 // being executed. For native PTB commands, we don't need it so we can pass
                 // an empty one.
-                const moveCallStack = 'frames' in cmdFrame && 'globals' in cmdFrame
-                    ? cmdFrame as IMoveCallStack
-                    : { frames: [], globals: new Map() };
                 const variableHandle = this.variableHandles.get(args.variablesReference);
                 if (variableHandle) {
                     if ('locals' in variableHandle) {
                         // we are dealing with a scope
                         // (either from Move call or from native PTB command)
-                        variables = this.convertRuntimeVariables(variableHandle, moveCallStack);
+                        variables = this.convertRuntimeVariables(variableHandle);
                     } else {
                         // we are dealing with a compound value
                         if (Array.isArray(variableHandle)) {
                             for (let i = 0; i < variableHandle.length; i++) {
                                 const v = variableHandle[i];
-                                variables.push(this.convertMoveValue(moveCallStack, v, String(i), []));
+                                variables.push(this.convertMoveValue(v, String(i), []));
                             }
                         } else {
                             variableHandle.fields.forEach(([fname, fvalue]) => {
-                                variables.push(this.convertMoveValue(moveCallStack, fvalue, fname, []));
+                                variables.push(this.convertMoveValue(fvalue, fname, []));
                             });
                         }
                     }
