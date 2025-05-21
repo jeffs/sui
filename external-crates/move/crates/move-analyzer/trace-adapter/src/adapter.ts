@@ -225,6 +225,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         }
     }
 
+    /**
+     * Handles launch request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param args launch request arguments.
+     */
     protected async launchRequest(
         response: DebugProtocol.LaunchResponse,
         args: ILaunchRequestArguments
@@ -251,9 +256,14 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    /**
+     * Handles the stack trace request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param _args stack trace request arguments.
+     */
     protected stackTraceRequest(
         response: CustomizedStackTraceResponse,
-        args: DebugProtocol.StackTraceArguments
+        _args: DebugProtocol.StackTraceArguments
     ): void {
         try {
             const stackFrames = [];
@@ -275,6 +285,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             const cmdFrame = ptbStack.commandFrame;
             if (cmdFrame) {
                 if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+                    // Move call stack
                     const moveCallStack = cmdFrame as IMoveCallStack;
                     const stack_height = moveCallStack.frames.length;
                     stackFrames.push(...moveCallStack.frames.map(frame => {
@@ -295,6 +306,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                             : moveCallStack.frames[stack_height - 1].optimizedSrcLines;
                     }
                 } else if ('id' in cmdFrame && 'line' in cmdFrame && 'command' in cmdFrame) {
+                    // Native PTB commands
                     switch (cmdFrame.command.kind) {
                         case PTBCommandKind.TransferStart:
                         case PTBCommandKind.SplitCoinsStart:
@@ -325,6 +337,13 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    /**
+     * Handles the source request coming from the client. This request
+     * comes from the client if frame source returned as part of the stack trace
+     * request requires custom handling by the server.
+     * @param response response to be sent back to the client.
+     * @param args source request arguments.
+     */
     protected sourceRequest(
         response: DebugProtocol.SourceResponse,
         args: DebugProtocol.SourceArguments
@@ -418,6 +437,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         return scopes;
     }
 
+    /**
+     * Handles the variable scopes request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param args scopes request arguments.
+     */
     protected scopesRequest(
         response: DebugProtocol.ScopesResponse,
         args: DebugProtocol.ScopesArguments
@@ -624,6 +648,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         return variables;
     }
 
+    /**
+     * Handles the variables request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param args variables request arguments.
+     */
     protected variablesRequest(
         response: DebugProtocol.VariablesResponse,
         args: DebugProtocol.VariablesArguments
@@ -679,6 +708,11 @@ export class MoveDebugSession extends LoggingDebugSession {
     }
 
 
+    /**
+     * Handles next request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param _args next request arguments.
+     */
     protected nextRequest(
         response: DebugProtocol.NextResponse,
         _args: DebugProtocol.NextArguments
@@ -697,6 +731,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    /**
+     * Handles step-in (to a function) request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param _args step-in request arguments.
+     */
     protected stepInRequest(
         response: DebugProtocol.StepInResponse,
         _args: DebugProtocol.StepInArguments
@@ -715,6 +754,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    /**
+     * Handles step-out (to the caller) request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param _args step-out request arguments.
+     */
     protected stepOutRequest(
         response: DebugProtocol.StepOutResponse,
         _args: DebugProtocol.StepOutArguments
@@ -733,6 +777,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    /**
+     * Handles continue request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param _args continue request arguments.
+     */
     protected continueRequest(
         response: DebugProtocol.ContinueResponse,
         _args: DebugProtocol.ContinueArguments
@@ -751,6 +800,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    /**
+     * Handles set breakpoints request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param args set breakpoints request arguments.
+     */
     protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
         try {
             const finalBreakpoints = [];
@@ -771,6 +825,11 @@ export class MoveDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    /**
+     * Handles disconnect request coming from the client.
+     * @param response response to be sent back to the client.
+     * @param _args disconnect request arguments.
+     */
     protected disconnectRequest(
         response: DebugProtocol.DisconnectResponse,
         _args: DebugProtocol.DisconnectArguments
