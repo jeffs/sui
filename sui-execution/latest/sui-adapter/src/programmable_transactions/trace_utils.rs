@@ -237,7 +237,6 @@ fn trace_type_to_type_tag_with_refs(
         Type::MutableReference(t) => (t.as_ref(), Some(RefType::Mut)),
         t => (t, None),
     };
-    // this invariant violation will only trigger when tracing
     let type_ = context
         .vm
         .get_runtime()
