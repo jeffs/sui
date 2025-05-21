@@ -46,7 +46,7 @@ pub fn trace_transfer(
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let to_transfer = obj_values
-            .into_iter()
+            .iter()
             .map(|v| obj_info_from_obj_value(context, v))
             .collect::<Result<Vec<_>, _>>()?;
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
@@ -98,7 +98,7 @@ pub fn trace_split_coins(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     coin_type: &Type,
     input_coin: &Coin,
-    split_coin_values: &Vec<Value>,
+    split_coin_values: &[Value],
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, coin_type)?;
@@ -114,7 +114,7 @@ pub fn trace_split_coins(
                 };
                 coin_obj_info(
                     type_tag_with_refs.clone(),
-                    split_coin.id.object_id().clone(),
+                    *split_coin.id.object_id(),
                     split_coin.balance.value(),
                 )
             })
@@ -122,7 +122,7 @@ pub fn trace_split_coins(
 
         let input = coin_obj_info(
             type_tag_with_refs.clone(),
-            input_coin.id.object_id().clone(),
+            *input_coin.id.object_id(),
             input_coin.value(),
         )?;
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
@@ -153,7 +153,7 @@ fn obj_info_from_obj_value(
                 .map_err(|e| {
                     ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
                 })?;
-            let move_value = BoundedVisitor::deserialize_value(&bytes, &layout).map_err(|e| {
+            let move_value = BoundedVisitor::deserialize_value(bytes, &layout).map_err(|e| {
                 ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
             })?;
             let serialized_move_value = SerializableMoveValue::from(move_value);
