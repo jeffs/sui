@@ -1429,19 +1429,17 @@ export class Runtime extends EventEmitter {
         let varName = showDisassembly
             ? variable.info.internalName
             : variable.info.name;
-        return this.valueToString(moveCallStack, tabs, variable.value, varName, [], variable.type);
+        return this.valueToString(tabs, variable.value, varName, [], variable.type);
     }
 
     /**
      * Returns a string representation of a runtime compound value.
      *
-     * @param moveCallStack current Move call stack.
      * @param tabs indentation for the string representation.
      * @param compoundValue runtime compound value.
      * @returns string representation of the compound value.
      */
     private compoundValueToString(
-        moveCallStack: IMoveCallStack,
         tabs: string,
         compoundValue: IRuntimeCompoundValue
     ): string {
@@ -1450,7 +1448,7 @@ export class Runtime extends EventEmitter {
             : compoundValue.type;
         let res = '(' + type + ') {\n';
         for (const [name, value] of compoundValue.fields) {
-            res += this.valueToString(moveCallStack, tabs + this.singleTab, value, name, []);
+            res += this.valueToString(tabs + this.singleTab, value, name, []);
         }
         res += tabs + '}\n';
         return res;
@@ -1459,7 +1457,6 @@ export class Runtime extends EventEmitter {
     /**
      * Returns a string representation of a runtime reference value.
      *
-     * @param moveCallStack current Move call stack.
      * @param tabs indentation for the string representation.
      * @param refValue runtime reference value.
      * @param name name of the variable containing reference value.
@@ -1467,12 +1464,14 @@ export class Runtime extends EventEmitter {
      * @returns string representation of the reference value.
      */
     private refValueToString(
-        moveCallStack: IMoveCallStack,
         tabs: string,
         refValue: IRuntimeRefValue,
         name: string,
         type?: string
     ): string {
+        // Reference values are only present in Move calls when
+        // the Move call stack is present in the command frame
+        const moveCallStack = this.stack().commandFrame as IMoveCallStack;
         const indexedLoc = refValue.indexedLoc;
         let res = '';
         if ('globalIndex' in indexedLoc.loc) {
@@ -1480,7 +1479,7 @@ export class Runtime extends EventEmitter {
             const globalValue = moveCallStack.globals.get(indexedLoc.loc.globalIndex);
             if (globalValue) {
                 const indexPath = [...indexedLoc.indexPath];
-                return this.valueToString(moveCallStack, tabs, globalValue, name, indexPath, type);
+                return this.valueToString(tabs, globalValue, name, indexPath, type);
             }
         } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
             const frameID = indexedLoc.loc.frameID;
@@ -1499,7 +1498,7 @@ export class Runtime extends EventEmitter {
                 return res;
             }
             const indexPath = [...indexedLoc.indexPath];
-            return this.valueToString(moveCallStack, tabs, local.value, name, indexPath, type);
+            return this.valueToString(tabs, local.value, name, indexPath, type);
         }
         return res;
     }
@@ -1507,7 +1506,6 @@ export class Runtime extends EventEmitter {
     /**
      * Returns a string representation of a runtime value.
      *
-     * @param moveCallStack current Move call stack.
      * @param value runtime value.
      * @param name name of the variable containing the value.
      * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
@@ -1516,7 +1514,6 @@ export class Runtime extends EventEmitter {
      * @returns string representation of the value.
      */
     private valueToString(
-        moveCallStack: IMoveCallStack,
         tabs: string,
         value: RuntimeValueType,
         name: string,
@@ -1533,12 +1530,12 @@ export class Runtime extends EventEmitter {
             if (indexPath.length > 0) {
                 const index = indexPath.pop();
                 if (index !== undefined) {
-                    res += this.valueToString(moveCallStack, tabs, value[index], name, indexPath, type);
+                    res += this.valueToString(tabs, value[index], name, indexPath, type);
                 }
             } else {
                 res += tabs + name + ' : [\n';
                 for (let i = 0; i < value.length; i++) {
-                    res += this.valueToString(moveCallStack, tabs + this.singleTab, value[i], String(i), indexPath);
+                    res += this.valueToString(tabs + this.singleTab, value[i], String(i), indexPath);
                 }
                 res += tabs + ']\n';
                 if (type) {
@@ -1549,16 +1546,16 @@ export class Runtime extends EventEmitter {
             if (indexPath.length > 0) {
                 const index = indexPath.pop();
                 if (index !== undefined) {
-                    res += this.valueToString(moveCallStack, tabs, value.fields[index][1], name, indexPath, type);
+                    res += this.valueToString(tabs, value.fields[index][1], name, indexPath, type);
                 }
             } else {
-                res += tabs + name + ' : ' + this.compoundValueToString(moveCallStack, tabs, value);
+                res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
                 if (type) {
                     res += tabs + 'type: ' + type + '\n';
                 }
             }
         } else {
-            res += this.refValueToString(moveCallStack, tabs, value, name, type);
+            res += this.refValueToString(tabs, value, name, type);
         }
         return res;
     }
