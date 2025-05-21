@@ -98,7 +98,7 @@ pub fn trace_split_coins(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     coin_type: &Type,
     input_coin: &Coin,
-    split_coin_values: &[Value],
+    split_coin_values: &Vec<Value>,
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, coin_type)?;
