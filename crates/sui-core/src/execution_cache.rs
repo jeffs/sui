@@ -410,7 +410,6 @@ pub trait ObjectCacheRead: Send + Sync {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
-        did_wait: &'a mut bool,
     ) -> BoxFuture<'a, ()>;
 }
 

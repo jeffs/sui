@@ -146,7 +146,6 @@ impl ExecutionScheduler {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        let _pending_guard = PendingGuard::new(&self, &cert);
         let enqueue_time = Instant::now();
         let tx_data = cert.transaction_data();
         let input_object_kinds = tx_data
@@ -197,28 +196,45 @@ impl ExecutionScheduler {
             "Waiting for input objects: {:?}",
             input_and_receiving_keys
         );
+
+        let availability = self.object_cache_read.multi_input_objects_available(
+            &input_and_receiving_keys,
+            &receiving_object_keys,
+            &epoch,
+        );
+        // Most of the times, the transaction's input objects are already available.
+        // We can check the availability of the input objects first, and only wait for the
+        // missing input objects if necessary.
+        let missing_input_keys: Vec<_> = input_and_receiving_keys
+            .into_iter()
+            .zip(availability)
+            .filter_map(|(key, available)| if !available { Some(key) } else { None })
+            .collect();
+        if missing_input_keys.is_empty() {
+            self.metrics
+                .transaction_manager_num_enqueued_certificates
+                .with_label_values(&["ready"])
+                .inc();
+            debug!(?digest, "Input objects already available");
+            self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time);
+            return;
+        }
+
+        let _pending_guard = PendingGuard::new(&self, &cert);
         self.metrics
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["pending"])
             .inc();
-        let mut did_wait = false;
-
         tokio::select! {
             _ = self.object_cache_read
-                .notify_read_input_objects(&input_and_receiving_keys, &receiving_object_keys, &epoch, &mut did_wait)
+                .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, &epoch)
                 => {
-                    // transaction_manager_transaction_queue_age_s tracks the amount of time
-                    // a transaction is waiting for input objects.
-                    // If the transaction did not wait, it means that the input objects were already
-                    // available, and we don't want to record the age.
-                    if did_wait {
-                        self.metrics
-                            .transaction_manager_transaction_queue_age_s
-                            .observe(enqueue_time.elapsed().as_secs_f64());
-                        debug!(?digest, "Input objects available");
-                    }
+                    self.metrics
+                        .transaction_manager_transaction_queue_age_s
+                        .observe(enqueue_time.elapsed().as_secs_f64());
+                    debug!(?digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
-                    self.send_transaction_for_execution(cert.clone(), expected_effects_digest, enqueue_time);
+                    self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time);
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 debug!(?digests, "Transaction already executed");
@@ -228,12 +244,12 @@ impl ExecutionScheduler {
 
     fn send_transaction_for_execution(
         &self,
-        cert: VerifiedExecutableTransaction,
+        cert: &VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         enqueue_time: Instant,
     ) {
         let pending_cert = PendingCertificate {
-            certificate: cert,
+            certificate: cert.clone(),
             expected_effects_digest,
             waiting_input_objects: BTreeSet::new(),
             stats: PendingCertificateStats {
