@@ -351,7 +351,7 @@ mod test {
     use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
     use crate::execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper};
 
-    use super::PendingCertificate;
+    use super::{ExecutionScheduler, PendingCertificate};
 
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
     fn make_execution_scheduler(
@@ -363,13 +363,15 @@ mod test {
         // Create a new execution scheduler instead of reusing the authority's, to examine
         // execution_scheduler output from rx_ready_certificates.
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
-        let execution_scheduler = ExecutionSchedulerWrapper::new(
-            state.get_object_cache_reader().clone(),
-            state.get_transaction_cache_reader().clone(),
-            tx_ready_certificates,
-            &state.epoch_store_for_testing(),
-            state.metrics.clone(),
-        );
+        // Do not call ExecutionSchedulerWrapper::new() here, because we want to always
+        // construct an ExecutionScheduler in the tests here, not TransactionManager.
+        let execution_scheduler =
+            ExecutionSchedulerWrapper::ExecutionScheduler(ExecutionScheduler::new(
+                state.get_object_cache_reader().clone(),
+                state.get_transaction_cache_reader().clone(),
+                tx_ready_certificates,
+                state.metrics.clone(),
+            ));
 
         (execution_scheduler, rx_ready_certificates)
     }

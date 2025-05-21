@@ -8,6 +8,7 @@ use crate::{
 use enum_dispatch::enum_dispatch;
 use execution_scheduler_impl::ExecutionScheduler;
 use prometheus::IntGauge;
+use rand::Rng;
 use std::{collections::BTreeSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_protocol_config::Chain;
@@ -108,12 +109,13 @@ impl ExecutionSchedulerWrapper {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        // In tests, we always use ExecutionScheduler.
+        // In tests, we flip a coin to decide whether to use ExecutionScheduler or TransactionManager,
+        // so that both can be tested.
         // In prod, we use ExecutionScheduler only in devnet.
         // In other networks, we use TransactionManager by default, unless the env variable
         // `ENABLE_EXECUTION_SCHEDULER` is set.
         let enable_execution_scheduler = if cfg!(test) {
-            true
+            rand::thread_rng().gen_bool(0.5)
         } else {
             std::env::var("ENABLE_TRANSACTION_MANAGER").is_err()
                 && (std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
