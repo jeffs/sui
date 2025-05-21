@@ -670,9 +670,6 @@ export class MoveDebugSession extends LoggingDebugSession {
                 this.sendResponse(response);
             }
             if (cmdFrame) {
-                // Move call stask is only needed for variable conversion when a Move call is
-                // being executed. For native PTB commands, we don't need it so we can pass
-                // an empty one.
                 const variableHandle = this.variableHandles.get(args.variablesReference);
                 if (variableHandle) {
                     if ('locals' in variableHandle) {
