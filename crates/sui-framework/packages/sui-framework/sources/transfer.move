@@ -112,7 +112,7 @@ public fun public_freeze_object<T: key + store>(obj: T) {
 
 /// Turn the given object into a mutable shared object that everyone can access and mutate.
 /// This is irreversible, i.e. once an object is shared, it will stay shared forever.
-/// Aborts with `ESharedNonNewObject` of the object being shared was not created in this
+/// Aborts with `ESharedNonNewObject` if the object being shared was not created in this
 /// transaction. This restriction may be relaxed in the future.
 /// This function has custom rules performed by the Sui Move bytecode verifier that ensures
 /// that `T` is an object defined in the module where `share_object` is invoked. Use
@@ -123,7 +123,7 @@ public fun share_object<T: key>(obj: T) {
 
 /// Turn the given object into a mutable shared object that everyone can access and mutate.
 /// This is irreversible, i.e. once an object is shared, it will stay shared forever.
-/// Aborts with `ESharedNonNewObject` of the object being shared was not created in this
+/// Aborts with `ESharedNonNewObject` if the object being shared was not created in this
 /// transaction. This restriction may be relaxed in the future.
 /// The object must have `store` to be shared outside of its module.
 public fun public_share_object<T: key + store>(obj: T) {
